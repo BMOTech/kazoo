@@ -3,16 +3,32 @@
 -export([create_account/2
         ,delete_account/2
         ,cleanup_accounts/1, cleanup_accounts/2
+
+        ,command/2
+        ,symbolic_account_id/2
+
+        ,next_state/3
+        ,postcondition/3
         ]).
 
 -export([account_url/1]).
 
 -include("kazoo_proper.hrl").
 
+-spec command(pqc_kazoo_model:model(), ne_binary() | proper_types:type()) ->
+                     {'call', ?MODULE, 'create_account', [pqc_cb_api:state() | proper_types:term()]}.
+command(Model, Name) ->
+    {'call', ?MODULE, 'create_account', [pqc_kazoo_model:api(Model), Name]}.
+
+-spec symbolic_account_id(pqc_kazoo_model:model(), ne_binary() | proper_types:type()) ->
+                                 {'call', 'pqc_kazoo_model', 'account_id_by_name', [pqc_cb_api:state() | proper_types:type()]}.
+symbolic_account_id(Model, Name) ->
+    {'call', 'pqc_kazoo_model', 'account_id_by_name', [Model, Name]}.
+
 -spec create_account(pqc_cb_api:state(), ne_binary()) -> binary().
 create_account(API, NewAccountName) ->
     RequestData = kz_json:from_list([{<<"name">>, NewAccountName}]),
-    RequestEnvelope  = pqc_cb_api:create_envelope(RequestData),
+    RequestEnvelope = pqc_cb_api:create_envelope(RequestData),
 
     Resp = pqc_cb_api:make_request([201, 500]
                                   ,fun kz_http:put/3
@@ -66,3 +82,25 @@ account_url(#{}=API) ->
     account_url(pqc_cb_api:auth_account_id(API));
 account_url(AccountId) ->
     string:join([pqc_cb_api:v2_base_url(), "accounts", kz_term:to_list(AccountId)], "/").
+
+-spec next_state(pqc_kazoo_model:model(), any(), any()) -> pqc_kazoo_model:model().
+next_state(Model
+          ,APIResp
+          ,{'call', ?MODULE, 'create_account', [_API, Name]}
+          ) ->
+    pqc_util:transition_if(Model
+                          ,[{fun pqc_kazoo_model:is_account_missing/2, [Name]}
+                           ,{fun pqc_kazoo_model:add_account/3, [Name, APIResp]}
+                           ]).
+
+-spec postcondition(pqc_kazoo_model:model(), any(), any()) -> boolean().
+postcondition(Model
+             ,{'call', _, 'create_account', [_API, Name]}
+             ,APIResult
+             ) ->
+    case pqc_kazoo_model:account_id_by_name(Model, Name) of
+        'undefined' ->
+            'undefined' =/= pqc_cb_response:account_id(APIResult);
+        _AccountId ->
+            500 =:= pqc_cb_response:error_code(APIResult)
+    end.
