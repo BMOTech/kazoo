@@ -27,6 +27,7 @@
 -define(RATE_ID, <<"XX-1222">>).
 -define(RATEDECK_NAMES, [?KZ_RATES_DB, <<"custom">>]).
 -define(PHONE_NUMBERS, [<<"+12223334444">>]).
+-define(ACCOUNT_NAMES, [<<"account_for_rates">>]).
 
 -define(GLOBAL_COST, 1).
 -define(ACCOUNT_COST, 4).
@@ -46,9 +47,34 @@ upload_rate(API, RateDoc) ->
     CreateResp = pqc_cb_tasks:create(API, "category=rates&action=import", CSV),
     TaskId = kz_json:get_ne_binary_value([<<"data">>, <<"_read_only">>, <<"id">>], kz_json:decode(CreateResp)),
     _ExecResp = pqc_cb_tasks:execute(API, TaskId),
+    create_service_plan(API, RateDoc),
     _DelResp = wait_for_task(API, TaskId),
 
     {'ok', TaskId}.
+
+-spec create_service_plan(pqc_cb_api:state(), ne_binary() | proper_types:type()) -> 'ok'.
+create_service_plan(API, RatedeckId) ->
+    case pqc_cb_service_plans:create_service_plan(API, ratedeck_service_plan(RatedeckId)) of
+        {'ok', _} -> 'ok';
+        {'error', 'conflict'} -> 'ok'
+    end.
+
+-spec ratedeck_service_plan(kzd_rate:doc()) -> kzd_service_plan:doc().
+ratedeck_service_plan(RateDoc) ->
+    RatedeckId = kzd_rate:ratedeck(RateDoc),
+    kz_json:from_list([{<<"_id">>, service_plan_id(RatedeckId)}
+                      ,{<<"pvt_type">>, <<"service_plan">>}
+                      ,{<<"name">>, <<RatedeckId/binary, " Ratedeck Service Plan">>}
+                      ,{<<"plans">>
+                       ,kz_json:from_list([{<<"ratedeck">>
+                                           ,kz_json:from_list([{RatedeckId, kz_json:new()}])
+                                           }
+                                          ])
+                       }
+                      ]).
+
+service_plan_id(RatedeckId) ->
+    <<"plan_ratedeck_", RatedeckId/binary>>.
 
 wait_for_task(API, TaskId) ->
     GetResp = pqc_cb_tasks:fetch(API, TaskId),
@@ -70,6 +96,8 @@ delete_rate(API, RateDoc) ->
 
 -spec delete_rate(cb_pqc_api:state(), ne_binary(), ne_binary()) -> pqc_cb_api:response().
 delete_rate(API, ID, <<_/binary>>=RatedeckId) ->
+    _ = pqc_cb_service_plans:delete_service_plan(API, RatedeckId),
+
     URL = rate_url(ID, RatedeckId),
     pqc_cb_api:make_request([200, 404]
                            ,fun kz_http:delete/2
@@ -174,7 +202,9 @@ init() ->
     'ok'.
 
 cleanup(API) ->
-    _Cleanup = [?MODULE:delete_rate(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
+    _ = [?MODULE:delete_rate(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
+    _ = pqc_cb_accounts:cleanup_accounts(API, ?ACCOUNT_NAMES),
+    _ = [pqc_cb_service_plans:delete_service_plan(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
     'ok'.
 
 -spec initial_state() -> pqc_kazoo_model:model().
@@ -209,6 +239,9 @@ command(Model) ->
     oneof([{'call', ?MODULE, 'upload_rate', [API, rate_doc(ratedeck_id(), rate_cost())]}
           ,{'call', ?MODULE, 'delete_rate', [API, ratedeck_id()]}
           ,{'call', ?MODULE, 'rate_did', [API, ratedeck_id(), phone_number()]}
+          ,{'call', ?MODULE, 'create_service_plan', [API, ratedeck_id()]}
+          ,pqc_cb_accounts:command(API, account_name())
+          ,{'call', ?MODULE, 'assign_service_plan', [API, account_name(), ratedeck_id()]}
           ]).
 
 ratedeck_id() ->
@@ -220,7 +253,12 @@ rate_cost() ->
 phone_number() ->
     elements(?PHONE_NUMBERS).
 
+account_name() ->
+    oneof(?ACCOUNT_NAMES).
+
 -spec next_state(pqc_kazoo_model:model(), any(), any()) -> pqc_kazoo_model:model().
+next_state(Model, APIResp, {'call', _, 'create_account', _Args}=Call) ->
+    pqc_cb_accounts:next_state(Model, APIResp, Call);
 next_state(Model
           ,_APIResp
           ,{'call', _, 'upload_rate', [_API, RateDoc]}
@@ -249,6 +287,8 @@ next_state(Model
 precondition(_Model, _Call) -> 'true'.
 
 -spec postcondition(pqc_kazoo_model:model(), any(), any()) -> boolean().
+postcondition(Model, {'call', _, 'create_account', _Args}=Call, APIResult) ->
+    pqc_cb_accounts:postcondition(Model, Call, APIResult);
 postcondition(_Model
              ,{'call', _, 'upload_rate', [_API, _RateDoc]}
              ,{'ok', _TaskId}
