@@ -1,0 +1,38 @@
+#+OPTIONS: ':nil *:t -:t ::t <:t H:3 \n:nil ^:{} arch:headline
+#+OPTIONS: author:t broken-links:nil c:nil creator:nil
+#+OPTIONS: d:(not "LOGBOOK") date:t e:t email:nil f:t inline:t num:t
+#+OPTIONS: p:nil pri:nil prop:nil stat:t tags:t tasks:t tex:t
+#+OPTIONS: timestamp:t title:t toc:t todo:t |:t
+#+TITLE: Testing rates and ratedecks
+#+DATE: <2017-07-27 Thu>
+#+AUTHOR: james
+#+EMAIL: james.aimonetti@gmail.com
+#+LANGUAGE: en
+#+SELECT_TAGS: export
+#+EXCLUDE_TAGS: noexport
+#+CREATOR: Emacs 25.2.1 (Org mode 9.0.9)
+
+* Testing rates and ratedecks
+
+** Goal: create multiple ratedecks, assign rates in each, and verify the correct rate is chosen when rating a DID.
+
+The typical usage of the APIs to accomplish this:
+#+BEGIN_SRC plantuml :file ratedecks.png :exports results
+Client->/tasks: Create upload task for {RATEDECK} rates
+/tasks->Client: {TASK_ID}
+Client->/tasks/{TASK_ID}: Execute task
+/tasks/{TASK_ID}->Client: executing
+Client->/tasks/{TASK_ID}: Wait for completion
+/tasks/{TASK_ID}->Client: status=success
+Client->/tasks/{TASK_ID}: Delete task
+/tasks/{TASK_ID}->Client: deleted
+Client->/rates/{RATE_ID}: Get Rate
+/rates/{RATE_ID}->Client: Rate information
+Client->/rates/number/{DID}: Rate {DID} (specify ratedeck_id on query string)
+/rates/number/{DID}->Client: Returned rate for {DID}
+Client->/rates/{RATE_ID}: Delete rate
+/rates/{RATE_ID}->Client: deleted
+#+END_SRC
+
+#+RESULTS:
+[[file:ratedecks.png]]
