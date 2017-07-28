@@ -18,20 +18,20 @@
 
 The typical usage of the APIs to accomplish this:
 #+BEGIN_SRC plantuml :file ratedecks.png :exports results
-Client->/tasks: Create upload task for {RATEDECK} rates
-/tasks->Client: {TASK_ID}
-Client->/tasks/{TASK_ID}: Execute task
-/tasks/{TASK_ID}->Client: executing
-Client->/tasks/{TASK_ID}: Wait for completion
-/tasks/{TASK_ID}->Client: status=success
-Client->/tasks/{TASK_ID}: Delete task
-/tasks/{TASK_ID}->Client: deleted
-Client->/rates/{RATE_ID}: Get Rate
-/rates/{RATE_ID}->Client: Rate information
-Client->/rates/number/{DID}: Rate {DID} (specify ratedeck_id on query string)
-/rates/number/{DID}->Client: Returned rate for {DID}
-Client->/rates/{RATE_ID}: Delete rate
-/rates/{RATE_ID}->Client: deleted
+Client->"/tasks": Create upload task for {RATEDECK} rates
+"/tasks"->Client: {TASK_ID}
+Client->"/tasks/{TASK_ID}": Execute task
+"/tasks/{TASK_ID}"->Client: executing
+Client->"/tasks/{TASK_ID}": Wait for completion
+"/tasks/{TASK_ID}"->Client: status=success
+Client->"/tasks/{TASK_ID}": Delete task
+"/tasks/{TASK_ID}"->Client: deleted
+Client->"/rates/{RATE_ID}": Get Rate
+"/rates/{RATE_ID}"->Client: Rate information
+Client->"/rates/number/{DID}": Rate {DID} (specify ratedeck_id on query string)
+"/rates/number/{DID}"->Client: Returned rate for {DID}
+Client->"/rates/{RATE_ID}": Delete rate
+"/rates/{RATE_ID}"->Client: deleted
 #+END_SRC
 
 #+RESULTS:
