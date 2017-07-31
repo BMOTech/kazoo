@@ -1,7 +1,9 @@
 -module(kz_data_tracing).
 -behaviour(gen_server).
 
--export([start_link/0]).
+-export([start_link/0
+        ,status/0, status/1
+        ]).
 
 -export([init/1
         ,handle_call/3
@@ -24,9 +26,9 @@
                                      ," (", 'pid', ") "
                                      ,'message', "\n"
                                      ]).
--define(DEFAULT_TRACE_PROPS,
+-define(DEFAULT_TRACE_PROPS(Format),
         [{'formatter', 'lager_default_formatter'}
-        ,{'formatter_config', ?DEFAULT_TRACE_OUTPUT_FORMAT}
+        ,{'formatter_config', Format}
         ]
        ).
 
@@ -65,10 +67,18 @@ trace_file(Filters) ->
     trace_file(Filters, <<"/tmp/", (kz_binary:rand_hex(16))/binary, ".log">>).
 
 trace_file(Filters, Filename) ->
-    trace_file(Filters, Filename, ?DEFAULT_TRACE_PROPS).
+    trace_file(Filters, Filename, ?DEFAULT_TRACE_PROPS(?DEFAULT_TRACE_OUTPUT_FORMAT)).
 
 trace_file(Filters, Filename, Format) ->
-    gen_server:call(?MODULE, {'trace_file', Filters, Filename, Format}).
+    gen_server:call(?MODULE, {'trace_file', Filters, Filename, ?DEFAULT_TRACE_PROPS(Format)}).
+
+-spec status() -> [{ne_binary(), file:filename_all(), any()}].
+status() ->
+    gen_server:call(?MODULE, 'status').
+
+-spec status(Ref) -> {Ref, file:filename_all(), any()} | 'false'.
+status(Ref) ->
+    gen_server:call(?MODULE, {'status', Ref}).
 
 -spec stop_trace(ne_binary()) ->
                         {'ok', file:filename_all()} |
@@ -96,6 +106,10 @@ handle_call({'trace_file', Filters, Filename, Format}
         Result ->
             {'reply', Result, State}
     end;
+handle_call('status', _From, #state{traces=Traces}=State) ->
+    {'reply', Traces, State};
+handle_call({'status', Ref}, _From, #state{traces=Traces}=State) ->
+    {'reply', lists:keyfind(Ref, 1, Traces), State};
 handle_call({'stop_trace', TraceRef}
            ,_From
            ,#state{traces=Traces}=State
@@ -135,6 +149,7 @@ stop_trace_file(Trace) ->
 -spec start_trace(filters(), file:filename_all(), list()) ->
                          {'ok', trace_result()} |
                          {'error', trace_error()}.
+
 start_trace(Filters, Filename, Format) ->
     lager:trace_file(kz_term:to_list(Filename)
                     ,[{'sink', 'data_lager_event'} | Filters]
