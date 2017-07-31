@@ -245,40 +245,40 @@ seq() ->
         RateDoc = rate_doc(?KZ_RATES_DB, 1),
 
         _Up = ?MODULE:upload_rate(API, RateDoc),
-        lager:info("upload: ~p~n", [_Up]),
+        data:info(pqc_cb_api:log_info(), "upload: ~p~n", [_Up]),
 
         _Get = ?MODULE:get_rate(API, RateDoc),
-        lager:info("get: ~p~n", [_Get]),
+        data:info(pqc_cb_api:log_info(), "get: ~p~n", [_Get]),
 
         _Rated = ?MODULE:rate_did(API, kzd_rate:ratedeck(RateDoc), hd(?PHONE_NUMBERS)),
-        lager:info("rated: ~p~n", [_Rated]),
+        data:info(pqc_cb_api:log_info(), "rated: ~p~n", [_Rated]),
 
         _SP = ?MODULE:create_service_plan(API, kzd_rate:ratedeck(RateDoc)),
-        lager:info("created sp: ~p~n", [_SP]),
+        data:info(pqc_cb_api:log_info(), "created sp: ~p~n", [_SP]),
 
         AccountResp = pqc_cb_accounts:create_account(API, hd(?ACCOUNT_NAMES)),
         AccountId = kz_json:get_value([<<"data">>, <<"id">>], kz_json:decode(AccountResp)),
 
         case is_binary(AccountId) of
-            'true' -> lager:info("created account ~s~n", [AccountId]);
+            'true' -> data:info(pqc_cb_api:log_info(), "created account ~s~n", [AccountId]);
             'false' ->
-                lager:info("failed to get account id from ~s~n", [AccountResp]),
+                data:info(pqc_cb_api:log_info(), "failed to get account id from ~s~n", [AccountResp]),
                 throw(no_account_id)
         end,
 
         _Assigned = ?MODULE:assign_service_plan(API, AccountId, kzd_rate:ratedeck(RateDoc)),
-        lager:info("assigned service plan to account: ~p~n", [_Assigned]),
+        data:info(pqc_cb_api:log_info(), "assigned service plan to account: ~p~n", [_Assigned]),
 
         _AcctRated = ?MODULE:rate_account_did(API, AccountId, hd(?PHONE_NUMBERS)),
-        lager:info("rated ~s in account ~s: ~p~n", [hd(?PHONE_NUMBERS), AccountId, _AcctRated]),
+        data:info(pqc_cb_api:log_info(), "rated ~s in account ~s: ~p~n", [hd(?PHONE_NUMBERS), AccountId, _AcctRated]),
 
         _Deleted = ?MODULE:delete_rate(API, RateDoc),
-        lager:info("deleted: ~p~n", [_Deleted])
+        data:info(pqc_cb_api:log_info(), "deleted: ~p~n", [_Deleted])
     catch
         _E:_R ->
             ST = erlang:get_stacktrace(),
-            lager:info("crashed ~s: ~p~n", [_E, _R]),
-            [lager:info("s: ~p~n", [S]) || S <- ST]
+            data:info(pqc_cb_api:log_info(), "crashed ~s: ~p~n", [_E, _R]),
+            [data:info(pqc_cb_api:log_info(), "s: ~p~n", [S]) || S <- ST]
     after
         cleanup(API)
     end.

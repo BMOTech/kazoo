@@ -64,7 +64,7 @@ cleanup_accounts(API, AccountNames) ->
 cleanup_account(API, AccountName) ->
     _ = try pqc_cb_search:search_account_by_name(API, AccountName) of
             ?FAILED_RESPONSE ->
-                lager:info("failed to search for account by name ~s~n", [AccountName]);
+                data:info("failed to search for account by name ~s~n", [AccountName]);
             APIResp ->
                 Data = pqc_cb_response:data(APIResp),
                 case kz_json:get_ne_binary_value([1, <<"id">>], Data) of
@@ -74,7 +74,7 @@ cleanup_account(API, AccountName) ->
                 end
         catch
             'throw':{'error', 'socket_closed_remotely'} ->
-                lager:info("broke the SUT cleaning up account ~s (~p)~n", [AccountName, API])
+                data:info("broke the SUT cleaning up account ~s (~p)~n", [AccountName, API])
         end,
     timer:sleep(1000).% was needed to stop overwhelming the socket, at least locally
 
@@ -85,7 +85,7 @@ check_accounts_db(Name) ->
         {'ok', []} -> 'ok';
         {'error', _} -> 'ok';
         {'ok', JObjs} ->
-            lager:info("deleting from ~s: ~p~n", [?KZ_ACCOUNTS_DB, JObjs]),
+            data:info("deleting from ~s: ~p~n", [?KZ_ACCOUNTS_DB, JObjs]),
             kz_datamgr:del_docs(?KZ_ACCOUNTS_DB, JObjs)
     end.
 

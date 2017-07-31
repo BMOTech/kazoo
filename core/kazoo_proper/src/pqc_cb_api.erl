@@ -8,10 +8,18 @@
         ,create_envelope/1, create_envelope/2
         ,make_request/4, make_request/5
 
-        ,cleanup/1
+        ,cleanup/1, log_info/0
         ]).
 
 -include("kazoo_proper.hrl").
+
+-define(TRACE_FORMAT
+       ,[{'elapsed', <<"-0">>}, "|"
+        ,'request_id', "|"
+        ,'module', ":", 'line', " (", 'pid', ")|"
+        ,'message', "\n"
+        ]
+       ).
 
 -type state() :: #{'auth_token' => ne_binary()
                   ,'account_id' => ne_binary()
@@ -28,9 +36,10 @@
 cleanup(#{'trace_file' := Trace
          ,'start' := Start
          }) ->
-    lager:info("cleanup after ~p ms", [kz_time:elapsed_ms(Start)]),
-    io:format('user', "run complete after ~p ms ~p~n", [kz_time:elapsed_ms(Start), Trace]),
-    lager:stop_trace(Trace).
+    {_, TraceFile, _} = kz_data_tracing:status(Trace),
+    data:info(log_info(), "cleanup after ~p ms", [kz_time:elapsed_ms(Start)]),
+    io:format('user', "run complete after ~p ms ~s~n", [kz_time:elapsed_ms(Start), TraceFile]),
+    kz_data_tracing:stop_trace(Trace).
 
 -define(API_BASE, "http://" ++ net_adm:localhost() ++ ":8000/v2").
 
@@ -42,19 +51,7 @@ authenticate() ->
 
     RequestId = kz_binary:rand_hex(5),
 
-    lager:md([{'request_id', RequestId}]),
-    TraceFile = "/tmp/" ++ kz_term:to_list(RequestId) ++ ".log",
-
-    {'ok', Trace} = lager:trace_file(TraceFile
-                                    ,[{'any', [glc_ops:eq('request_id', RequestId)
-                                              ,glc_ops:eq('pid', pid_to_list(self()))
-                                              ]
-                                      }
-                                     ]
-                                    ,'debug'
-                                    ),
-    io:format('user', "starting test (tracing to ~s)~n", [TraceFile]),
-    lager:info("authenticating...~s", [RequestId]),
+    {'ok', Trace} = start_trace(RequestId),
 
     Resp = make_request([201]
                        ,fun kz_http:put/3
@@ -71,7 +68,7 @@ api_key() ->
         {'ok', MasterAccountId} ->
             api_key(MasterAccountId);
         {'error', _} ->
-            lager:error("failed to find master account, please create an account first"),
+            data:error(log_info(), "failed to find master account, please create an account first"),
             throw('no_master_account')
     end.
 
@@ -82,22 +79,22 @@ api_key(MasterAccountId) ->
             case is_binary(APIKey) of
                 'true' -> APIKey;
                 'false' ->
-                    lager:error("failed to fetch api key for ~s", [MasterAccountId]),
+                    data:error(log_info(), "failed to fetch api key for ~s", [MasterAccountId]),
                     throw('missing_api_key')
             end;
         {'error', _E} ->
-            lager:error("failed to fetch master account ~s: ~p", [MasterAccountId, _E]),
+            data:error(log_info(), "failed to fetch master account ~s: ~p", [MasterAccountId, _E]),
             throw('missing_master_account')
     end.
 
--spec create_api_state(binary(), binary(), string()) -> map().
-create_api_state(RespJSON, RequestId, TraceFile) ->
+-spec create_api_state(binary(), binary(), {string(), any()}) -> map().
+create_api_state(RespJSON, RequestId, Trace) ->
     RespEnvelope = kz_json:decode(RespJSON),
     #{'auth_token' => kz_json:get_ne_binary_value(<<"auth_token">>, RespEnvelope)
      ,'account_id' => kz_json:get_ne_binary_value([<<"data">>, <<"account_id">>], RespEnvelope)
      ,'request_id' => RequestId
-     ,'trace_file' => TraceFile
-     ,'start' => kz_time:now()
+     ,'trace_file' => Trace
+     ,'start' => get('now')
      }.
 
 -spec v2_base_url() -> string().
@@ -141,13 +138,13 @@ default_request_headers(RequestId) ->
 -spec make_request(expected_codes(), fun(), string(), kz_proplist()) -> response().
 -spec make_request(expected_codes(), fun(), string(), kz_proplist(), iodata()) -> response().
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders) ->
-    lager:info("~p: ~s", [HTTP, URL]),
-    lager:info("headers: ~p", [RequestHeaders]),
+    data:info(log_info(), "~p: ~s", [HTTP, URL]),
+    data:info(log_info(), "headers: ~p", [RequestHeaders]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders)).
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders, RequestBody) ->
-    lager:info("~p: ~s", [HTTP, URL]),
-    lager:info("headers: ~p", [RequestHeaders]),
-    lager:info("body: ~s", [RequestBody]),
+    data:info(log_info(), "~p: ~s", [HTTP, URL]),
+    data:info(log_info(), "headers: ~p", [RequestHeaders]),
+    data:info(log_info(), "body: ~s", [RequestBody]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders, iolist_to_binary(RequestBody))).
 
 -spec create_envelope(kz_json:object()) ->
@@ -161,23 +158,44 @@ create_envelope(Data, Envelope) ->
 
 -spec handle_response(expected_codes(), kz_http:ret()) -> response().
 handle_response(ExpectedCode, {'ok', ExpectedCode, _RespHeaders, RespBody}) ->
-    lager:info("recv expected ~p: ~s", [ExpectedCode, RespBody]),
+    data:info(log_info(), "recv expected ~p: ~s", [ExpectedCode, RespBody]),
     RespBody;
 handle_response(ExpectedCodes, {'ok', ActualCode, _RespHeaders, RespBody})
   when is_list(ExpectedCodes) ->
     case lists:member(ActualCode, ExpectedCodes) of
         'true' ->
-            lager:info("recv expected ~p: ~s", [ActualCode, RespBody]),
+            data:info(log_info(), "recv expected ~p: ~s", [ActualCode, RespBody]),
             RespBody;
         'false' ->
-            lager:error("failed to get any ~w: ~p: ~s"
-                       ,[ExpectedCodes, ActualCode, RespBody]
-                       ),
+            data:error(log_info(), "failed to get any ~w: ~p: ~s"
+                      ,[ExpectedCodes, ActualCode, RespBody]
+                      ),
             {'error', RespBody}
     end;
 handle_response(_ExtectedCode, {'error','socket_closed_remotely'}=E) ->
-    lager:error("~nwe broke crossbar!"),
+    data:error(log_info(), "~nwe broke crossbar!"),
     throw(E);
 handle_response(_ExpectedCode, {'ok', _ActualCode, _RespHeaders, RespBody}) ->
-    lager:error("failed to get ~w: ~p: ~s", [_ExpectedCode, _ActualCode, RespBody]),
+    data:error(log_info(), "failed to get ~w: ~p: ~s", [_ExpectedCode, _ActualCode, RespBody]),
     {'error', RespBody}.
+
+start_trace(RequestId) ->
+    lager:md([{'request_id', RequestId}]),
+    put('now', kz_time:now()),
+    TraceFile = "/tmp/" ++ kz_term:to_list(RequestId) ++ ".log",
+
+    {'ok', _}=Trace = kz_data_tracing:trace_file([{'any', [glc_ops:eq('request_id', RequestId)
+                                                          ,glc_ops:eq('pid', pid_to_list(self()))
+                                                          ]
+                                                  }
+                                                 ]
+                                                ,TraceFile
+                                                ,?TRACE_FORMAT
+                                                ),
+    io:format('user', "starting test (tracing to ~s)~n", [TraceFile]),
+    data:info(log_info(), "authenticating...~s", [RequestId]),
+    Trace.
+
+-spec log_info() -> [{atom(), any()}].
+log_info() ->
+    [{'elapsed', kz_term:to_list(kz_time:elapsed_ms(get('now')))}].
