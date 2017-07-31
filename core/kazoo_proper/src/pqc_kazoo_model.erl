@@ -15,10 +15,12 @@
         ,is_number_in_account/3
         ,is_number_missing_in_account/3
         ,is_rate_missing/3, does_rate_exist/3
-        ,has_rate_matching/3
+        ,has_rate_matching/3, has_service_plan_rate_matching/3
 
          %% Model manipulations
+        ,add_service_plan/2
         ,add_account/3
+        ,add_service_plan_to_account/3
         ,add_number_to_account/4
         ,add_rate_to_ratedeck/3, remove_rate_from_ratedeck/3
         ,remove_number_from_account/2
@@ -32,7 +34,7 @@
 -type rate_data() :: #{ne_binary() => integer()}.
 
 -type account_data() :: #{'id' => ne_binary()
-                         ,'ratedeck' => ne_binary() %% assigned ratedeck via service plan
+                         ,'service_plans' => ne_binaries()
                          }.
 -type accounts() :: #{ne_binary() => account_data()}.
 
@@ -45,6 +47,7 @@
        ,{'accounts' = #{} :: accounts()
         ,'numbers' = #{} :: numbers()
         ,'ratedecks' = #{} :: #{ne_binary() => rate_data()}
+        ,'service_plans' = [] :: ne_binaries() % plan IDs
         ,'api' :: pqc_cb_api:state()
         }
        ).
@@ -77,6 +80,27 @@ has_accounts(#kazoo_model{'accounts'=Accounts}) ->
 has_rate_matching(#kazoo_model{'ratedecks'=Ratedecks}, RatedeckId, DID) ->
     Ratedeck = maps:get(RatedeckId, Ratedecks, #{}),
     has_rate_matching(Ratedeck, DID).
+
+-spec has_service_plan_rate_matching(model(), ne_binary(), ne_binary()) -> boolean().
+has_service_plan_rate_matching(#kazoo_model{'accounts'=Accounts
+                                           ,'service_plans'=SPs
+                                           ,'ratedecks'=Ratedecks
+                                           }
+                              ,AccountId
+                              ,DID
+                              ) ->
+    Account = maps:get(AccountId, Accounts, #{}),
+    case maps:get('service_plans', Account) of
+        'undefined' -> 'false';
+        [] -> 'false';
+        [SP] ->
+            case lists:member(SP, SPs) of
+                'false' -> 'false';
+                'true' ->
+                    Ratedeck = maps:get(SP, Ratedecks, #{}),
+                    has_rate_matching(Ratedeck, DID)
+            end
+    end.
 
 -spec has_rate_matching(rate_data(), ne_binary()) -> boolean().
 has_rate_matching(Ratedeck, <<"+", Number/binary>>) ->
@@ -130,9 +154,7 @@ does_rate_exist(Model, RatedeckId, RateDoc) ->
 add_account(#kazoo_model{'accounts'=Accounts}=State, Name, APIResp) ->
     ID = {'call', 'pqc_cb_response', 'account_id', [APIResp]},
     State#kazoo_model{'accounts' = Accounts#{Name => #{'id' => ID}
-                                            ,ID => #{'name' => Name
-                                                    ,'rates' => #{}
-                                                    }
+                                            ,ID => #{'name' => Name}
                                             }}.
 
 -spec add_rate_to_ratedeck(model(), ne_binary(), kzd_rate:doc()) -> model().
@@ -156,6 +178,17 @@ add_number_to_account(#kazoo_model{'numbers'=Numbers}=Model, AccountId, Number, 
                   ,'numbers_state' => NumberState
                   },
     Model#kazoo_model{'numbers'=Numbers#{Number => NumberData}}.
+
+-spec add_service_plan(model(), ne_binary()) -> model().
+add_service_plan(#kazoo_model{'service_plans'=Plans}=Model, Plan) ->
+    Model#kazoo_model{'service_plans'=lists:usort([Plan | Plans])}.
+
+-spec add_service_plan_to_account(model(), ne_binary(), ne_binary()) -> model().
+add_service_plan_to_account(#kazoo_model{'accounts'=Accounts}=Model, AccountId, ServicePlanId) ->
+    #{'service_plans' := Plans}=Account = maps:get(AccountId, Accounts),
+    Account1 = Account#{'service_plans' => lists:usort([ServicePlanId | Plans])},
+    Accounts1 = Accounts#{AccountId => Account1},
+    Model#kazoo_model{'accounts'=Accounts1}.
 
 -spec remove_number_from_account(model(), ne_binary()) -> model().
 remove_number_from_account(#kazoo_model{'numbers'=Numbers}=Model

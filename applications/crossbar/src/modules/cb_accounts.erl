@@ -26,7 +26,9 @@
         ]).
 
 -export([notify_new_account/1]).
--export([is_unique_realm/2]).
+-export([is_unique_realm/2
+        ,is_unique_account_name/2
+        ]).
 
 %% needed for API docs in cb_api_endpoints
 -export([allowed_methods_on_account/2]).
@@ -1493,7 +1495,7 @@ maybe_is_unique_account_name(AccountId, Name) ->
         'false' -> 'true'
     end.
 
--spec is_unique_account_name(api_binary(), ne_binary()) -> boolean().
+-spec is_unique_account_name(api_ne_binary(), ne_binary()) -> boolean().
 is_unique_account_name(AccountId, Name) ->
     AccountName = kz_util:normalize_account_name(Name),
     ViewOptions = [{'key', AccountName}],
