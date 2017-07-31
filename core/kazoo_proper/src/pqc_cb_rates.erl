@@ -241,7 +241,6 @@ seq() ->
     Model = initial_state(),
     API = pqc_kazoo_model:api(Model),
 
-    io:format("api: ~p~n", [API]),
     try
         RateDoc = rate_doc(?KZ_RATES_DB, 1),
 

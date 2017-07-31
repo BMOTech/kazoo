@@ -29,7 +29,7 @@ cleanup(#{'trace_file' := Trace
          ,'start' := Start
          }) ->
     lager:info("cleanup after ~p ms", [kz_time:elapsed_ms(Start)]),
-    io:format("run complete after ~p ms ~p~n", [kz_time:elapsed_ms(Start), Trace]),
+    io:format('user', "run complete after ~p ms ~p~n", [kz_time:elapsed_ms(Start), Trace]),
     lager:stop_trace(Trace).
 
 -define(API_BASE, "http://" ++ net_adm:localhost() ++ ":8000/v2").
@@ -39,16 +39,22 @@ authenticate() ->
     URL =  ?API_BASE ++ "/api_auth",
     Data = kz_json:from_list([{<<"api_key">>, api_key()}]),
     Envelope = create_envelope(Data),
+
     RequestId = kz_binary:rand_hex(5),
 
     lager:md([{'request_id', RequestId}]),
     TraceFile = "/tmp/" ++ kz_term:to_list(RequestId) ++ ".log",
+
     {'ok', Trace} = lager:trace_file(TraceFile
-                                    ,[{'any', [{'request_id', RequestId}, {'pid', pid_to_list(self())}]}]
+                                    ,[{'any', [glc_ops:eq('request_id', RequestId)
+                                              ,glc_ops:eq('pid', pid_to_list(self()))
+                                              ]
+                                      }
+                                     ]
                                     ,'debug'
                                     ),
-    io:format("starting test (tracing to ~s)~n", [TraceFile]),
-    lager:debug("starting test"),
+    io:format('user', "starting test (tracing to ~s)~n", [TraceFile]),
+    lager:info("authenticating...~s", [RequestId]),
 
     Resp = make_request([201]
                        ,fun kz_http:put/3
@@ -56,7 +62,7 @@ authenticate() ->
                        ,default_request_headers(RequestId)
                        ,kz_json:encode(Envelope)
                        ),
-    create_api_state(Resp, Trace).
+    create_api_state(Resp, RequestId, Trace).
 
 -spec api_key() -> ne_binary().
 -spec api_key(ne_binary()) -> ne_binary().
@@ -84,12 +90,12 @@ api_key(MasterAccountId) ->
             throw('missing_master_account')
     end.
 
--spec create_api_state(binary(), string()) -> map().
-create_api_state(RespJSON, TraceFile) ->
+-spec create_api_state(binary(), binary(), string()) -> map().
+create_api_state(RespJSON, RequestId, TraceFile) ->
     RespEnvelope = kz_json:decode(RespJSON),
     #{'auth_token' => kz_json:get_ne_binary_value(<<"auth_token">>, RespEnvelope)
      ,'account_id' => kz_json:get_ne_binary_value([<<"data">>, <<"account_id">>], RespEnvelope)
-     ,'request_id' => kz_binary:rand_hex(8)
+     ,'request_id' => RequestId
      ,'trace_file' => TraceFile
      ,'start' => kz_time:now()
      }.
