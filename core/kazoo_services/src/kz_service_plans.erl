@@ -53,12 +53,13 @@ empty() -> [].
 from_service_json(ServicesJObj) ->
     PlanIds = kzd_services:plan_ids(ServicesJObj),
     ResellerId = find_reseller_id(ServicesJObj),
+    lager:info("plan ids: ~p", [PlanIds]),
     get_plans(PlanIds, ResellerId, ServicesJObj).
 
 -spec find_reseller_id(kzd_services:doc()) -> api_binary().
 find_reseller_id(ServicesJObj) ->
     case kzd_services:reseller_id(ServicesJObj) of
-        'undefined' -> kz_json:get_value(<<"reseller_id">>, ServicesJObj);
+        'undefined' -> kz_json:get_ne_binary_value(<<"reseller_id">>, ServicesJObj);
         ResellerId -> ResellerId
     end.
 
@@ -220,6 +221,7 @@ get_plan(PlanId, ResellerId, Services, ServicePlans) ->
     VendorId = kzd_services:plan_account_id(Services, PlanId, ResellerId),
     Overrides = kzd_services:plan_overrides(Services, PlanId),
 
+    lager:info("vendor ~s overrides: ~p", [VendorId, Overrides]),
     case maybe_fetch_vendor_plan(PlanId, VendorId, ResellerId, Overrides) of
         'undefined' -> ServicePlans;
         Plan -> append_vendor_plan(Plan, VendorId, ServicePlans)
