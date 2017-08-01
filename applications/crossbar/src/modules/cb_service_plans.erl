@@ -278,9 +278,10 @@ delete(Context, PlanId) ->
 -spec add_plans(cb_context:context(), kz_services:services()) -> kz_services:services().
 add_plans(Context, Services) ->
     ReqData = cb_context:req_data(Context),
+    lager:info("adding ~p to ~p", [ReqData, Services]),
     lists:foldl(fun kz_services:add_service_plan/2
                ,Services
-               ,kz_json:get_value(<<"add">>, ReqData, [])
+               ,kz_json:get_list_value(<<"add">>, ReqData, [])
                ).
 
 %%--------------------------------------------------------------------
