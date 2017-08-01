@@ -1569,7 +1569,9 @@ support_depreciated_billing_id(BillingId, AccountId, Context) ->
 delete_remove_services(Context) ->
     case kz_services:delete(cb_context:account_id(Context)) of
         {'ok', _} -> delete_free_numbers(Context);
-        _ -> crossbar_util:response('error', <<"unable to cancel services">>, 500, Context)
+        _Err ->
+            lager:error("failed to delete services: ~p", [_Err]),
+            crossbar_util:response('error', <<"unable to cancel services">>, 500, Context)
     end.
 
 -spec delete_free_numbers(cb_context:context()) -> cb_context:context() | boolean().
