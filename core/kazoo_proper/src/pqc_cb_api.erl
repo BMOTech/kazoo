@@ -8,7 +8,7 @@
         ,create_envelope/1, create_envelope/2
         ,make_request/4, make_request/5
 
-        ,cleanup/1, log_info/0
+        ,cleanup/1
         ]).
 
 -include("kazoo_proper.hrl").
@@ -36,9 +36,7 @@
 cleanup(#{'trace_file' := Trace
          ,'start' := Start
          }) ->
-    {_, TraceFile, _} = kz_data_tracing:status(Trace),
-    data:info(log_info(), "cleanup after ~p ms", [kz_time:elapsed_ms(Start)]),
-    io:format('user', "run complete after ~p ms ~s~n", [kz_time:elapsed_ms(Start), TraceFile]),
+    ?INFO("cleanup after ~p ms", [kz_time:elapsed_ms(Start)]),
     kz_data_tracing:stop_trace(Trace).
 
 -define(API_BASE, "http://" ++ net_adm:localhost() ++ ":8000/v2").
@@ -68,7 +66,7 @@ api_key() ->
         {'ok', MasterAccountId} ->
             api_key(MasterAccountId);
         {'error', _} ->
-            data:error(log_info(), "failed to find master account, please create an account first"),
+            ?ERROR("failed to find master account, please create an account first"),
             throw('no_master_account')
     end.
 
@@ -79,11 +77,11 @@ api_key(MasterAccountId) ->
             case is_binary(APIKey) of
                 'true' -> APIKey;
                 'false' ->
-                    data:error(log_info(), "failed to fetch api key for ~s", [MasterAccountId]),
+                    ?ERROR("failed to fetch api key for ~s", [MasterAccountId]),
                     throw('missing_api_key')
             end;
         {'error', _E} ->
-            data:error(log_info(), "failed to fetch master account ~s: ~p", [MasterAccountId, _E]),
+            ?ERROR("failed to fetch master account ~s: ~p", [MasterAccountId, _E]),
             throw('missing_master_account')
     end.
 
@@ -138,13 +136,13 @@ default_request_headers(RequestId) ->
 -spec make_request(expected_codes(), fun(), string(), kz_proplist()) -> response().
 -spec make_request(expected_codes(), fun(), string(), kz_proplist(), iodata()) -> response().
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders) ->
-    data:info(log_info(), "~p: ~s", [HTTP, URL]),
-    data:info(log_info(), "headers: ~p", [RequestHeaders]),
+    ?INFO("~p: ~s", [HTTP, URL]),
+    ?INFO("headers: ~p", [RequestHeaders]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders)).
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders, RequestBody) ->
-    data:info(log_info(), "~p: ~s", [HTTP, URL]),
-    data:info(log_info(), "headers: ~p", [RequestHeaders]),
-    data:info(log_info(), "body: ~s", [RequestBody]),
+    ?INFO("~p: ~s", [HTTP, URL]),
+    ?INFO("headers: ~p", [RequestHeaders]),
+    ?INFO("body: ~s", [RequestBody]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders, iolist_to_binary(RequestBody))).
 
 -spec create_envelope(kz_json:object()) ->
@@ -158,25 +156,25 @@ create_envelope(Data, Envelope) ->
 
 -spec handle_response(expected_codes(), kz_http:ret()) -> response().
 handle_response(ExpectedCode, {'ok', ExpectedCode, _RespHeaders, RespBody}) ->
-    data:info(log_info(), "recv expected ~p: ~s", [ExpectedCode, RespBody]),
+    ?INFO("recv expected ~p: ~s", [ExpectedCode, RespBody]),
     RespBody;
 handle_response(ExpectedCodes, {'ok', ActualCode, _RespHeaders, RespBody})
   when is_list(ExpectedCodes) ->
     case lists:member(ActualCode, ExpectedCodes) of
         'true' ->
-            data:info(log_info(), "recv expected ~p: ~s", [ActualCode, RespBody]),
+            ?INFO("recv expected ~p: ~s", [ActualCode, RespBody]),
             RespBody;
         'false' ->
-            data:error(log_info(), "failed to get any ~w: ~p: ~s"
-                      ,[ExpectedCodes, ActualCode, RespBody]
-                      ),
+            ?ERROR("failed to get any ~w: ~p: ~s"
+                  ,[ExpectedCodes, ActualCode, RespBody]
+                  ),
             {'error', RespBody}
     end;
 handle_response(_ExtectedCode, {'error','socket_closed_remotely'}=E) ->
-    data:error(log_info(), "~nwe broke crossbar!"),
+    ?ERROR("~nwe broke crossbar!"),
     throw(E);
 handle_response(_ExpectedCode, {'ok', _ActualCode, _RespHeaders, RespBody}) ->
-    data:error(log_info(), "failed to get ~w: ~p: ~s", [_ExpectedCode, _ActualCode, RespBody]),
+    ?ERROR("failed to get ~w: ~p: ~s", [_ExpectedCode, _ActualCode, RespBody]),
     {'error', RespBody}.
 
 start_trace(RequestId) ->
@@ -192,10 +190,5 @@ start_trace(RequestId) ->
                                                 ,TraceFile
                                                 ,?TRACE_FORMAT
                                                 ),
-    io:format('user', "starting test (tracing to ~s)~n", [TraceFile]),
-    data:info(log_info(), "authenticating...~s", [RequestId]),
+    ?INFO("authenticating...~s", [RequestId]),
     Trace.
-
--spec log_info() -> [{atom(), any()}].
-log_info() ->
-    [{'elapsed', kz_term:to_list(kz_time:elapsed_ms(get('now')))}].

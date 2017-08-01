@@ -1,7 +1,7 @@
 -module(pqc_cb_rates).
 -behaviour(proper_statem).
 
--export([seq/0]).
+-export([seq/0, cleanup/0]).
 
 -export([upload_rate/2
         ,rate_did/3
@@ -66,12 +66,16 @@ create_service_plan(API, RatedeckId) ->
 
 -spec assign_service_plan(pqc_cb_api:state(), ne_binary() | proper_types:type(), ne_binary()) ->
                                  pqc_cb_api:response().
+assign_service_plan(_API, 'undefined', _RatedeckId) ->
+    ?FAILED_RESPONSE;
 assign_service_plan(API, AccountId, RatedeckId) ->
     ServicePlanId = service_plan_id(RatedeckId),
     pqc_cb_service_plans:assign_service_plan(API, AccountId, ServicePlanId).
 
 -spec rate_account_did(pqc_cb_api:state(), ne_binary() | proper_types:type(), ne_binary()) ->
                               pqc_cb_api:response().
+rate_account_did(_API, 'undefined', _DID) ->
+    ?FAILED_RESPONSE;
 rate_account_did(API, AccountId, DID) ->
     URL = string:join([pqc_cb_accounts:account_url(AccountId), "rates", "number", kz_term:to_list(DID)], "/"),
     RequestHeaders = pqc_cb_api:request_headers(API),
@@ -206,7 +210,7 @@ correct_parallel() ->
            ,?TRAPEXIT(
                begin
                    {Sequential, Parallel, Result} = run_parallel_commands(?MODULE, Cmds),
-                   cleanup(pqc_cb_api:authenticate()),
+                   cleanup(),
 
                    ?WHENFAIL(io:format("S: ~p~nP: ~p~n", [Sequential, Parallel])
                             ,aggregate(command_names(Cmds), Result =:= 'ok')
@@ -223,6 +227,10 @@ init() ->
             Mod <- ['cb_tasks', 'cb_rates', 'cb_accounts']
         ],
     'ok'.
+
+-spec cleanup() -> 'ok'.
+cleanup() ->
+    cleanup(pqc_cb_api:authenticate()).
 
 cleanup(API) ->
     _ = [?MODULE:delete_rate(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
@@ -245,42 +253,59 @@ seq() ->
         RateDoc = rate_doc(?KZ_RATES_DB, 1),
 
         _Up = ?MODULE:upload_rate(API, RateDoc),
-        data:info(pqc_cb_api:log_info(), "upload: ~p~n", [_Up]),
+        ?INFO("upload: ~p~n", [_Up]),
 
         _Get = ?MODULE:get_rate(API, RateDoc),
-        data:info(pqc_cb_api:log_info(), "get: ~p~n", [_Get]),
+        ?INFO("get: ~p~n", [_Get]),
 
         _Rated = ?MODULE:rate_did(API, kzd_rate:ratedeck(RateDoc), hd(?PHONE_NUMBERS)),
-        data:info(pqc_cb_api:log_info(), "rated: ~p~n", [_Rated]),
+        ?INFO("rated: ~p~n", [_Rated]),
 
         _SP = ?MODULE:create_service_plan(API, kzd_rate:ratedeck(RateDoc)),
-        data:info(pqc_cb_api:log_info(), "created sp: ~p~n", [_SP]),
+        ?INFO("created sp: ~p~n", [_SP]),
 
         AccountResp = pqc_cb_accounts:create_account(API, hd(?ACCOUNT_NAMES)),
         AccountId = kz_json:get_value([<<"data">>, <<"id">>], kz_json:decode(AccountResp)),
 
         case is_binary(AccountId) of
-            'true' -> data:info(pqc_cb_api:log_info(), "created account ~s~n", [AccountId]);
+            'true' -> ?INFO("created account ~s~n", [AccountId]);
             'false' ->
-                data:info(pqc_cb_api:log_info(), "failed to get account id from ~s~n", [AccountResp]),
+                ?INFO("failed to get account id from ~s~n", [AccountResp]),
                 throw(no_account_id)
         end,
 
+        PlanId = service_plan_id(kzd_rate:ratedeck(RateDoc)),
         _Assigned = ?MODULE:assign_service_plan(API, AccountId, kzd_rate:ratedeck(RateDoc)),
-        data:info(pqc_cb_api:log_info(), "assigned service plan to account: ~p~n", [_Assigned]),
+        case kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, PlanId]
+                              ,kz_json:decode(_Assigned)
+                              )
+        of
+            'undefined' ->
+                ?ERROR("failed to assign plan ~s to account ~s", [PlanId, AccountId]),
+                throw(no_plan);
+            _ ->
+                ?INFO("assigned service plan to account: ~p~n", [_Assigned])
+        end,
 
         _AcctRated = ?MODULE:rate_account_did(API, AccountId, hd(?PHONE_NUMBERS)),
-        data:info(pqc_cb_api:log_info(), "rated ~s in account ~s: ~p~n", [hd(?PHONE_NUMBERS), AccountId, _AcctRated]),
+        ?INFO("rated ~s in account ~s: ~p~n", [hd(?PHONE_NUMBERS), AccountId, _AcctRated]),
 
         _Deleted = ?MODULE:delete_rate(API, RateDoc),
-        data:info(pqc_cb_api:log_info(), "deleted: ~p~n", [_Deleted])
+        ?INFO("deleted: ~p~n", [_Deleted])
     catch
         _E:_R ->
             ST = erlang:get_stacktrace(),
-            data:info(pqc_cb_api:log_info(), "crashed ~s: ~p~n", [_E, _R]),
-            [data:info(pqc_cb_api:log_info(), "s: ~p~n", [S]) || S <- ST]
+            ?INFO("crashed ~s: ~p~n", [_E, _R]),
+            io:format("crashed ~s: ~p~n", [_E, _R]),
+            [begin
+                 ?INFO("s: ~p~n", [S]),
+                 io:format("s: ~p~n", [S])
+             end
+             || S <- ST
+            ]
     after
-        cleanup(API)
+        cleanup(API),
+        io:format("done: ~p~n", [API])
     end.
 
 -spec command(any()) -> proper_types:type().
@@ -352,7 +377,8 @@ next_state(Model
     PlanId = service_plan_id(RatedeckId),
     pqc_util:transition_if(Model
                           ,[{fun pqc_kazoo_model:does_account_exist/2, [AccountId]}
-                           ,{fun pqc_kazoo_model:add_service_plan/2, [RatedeckId]}
+                           ,{fun pqc_kazoo_model:does_service_plan_exist/2, [PlanId]}
+                           ,{fun pqc_kazoo_model:add_service_plan/2, [AccountId, RatedeckId]}
                            ]
                           );
 next_state(Model
@@ -388,14 +414,29 @@ postcondition(_Model
              ) ->
     'ok' =:= APIResult;
 postcondition(_Model
+             ,{'call', ?MODULE, 'assign_service_plan', [_API, 'undefined', _RatedeckId]}
+             ,?FAILED_RESPONSE
+             ) ->
+    'true';
+postcondition(Model
              ,{'call', ?MODULE, 'assign_service_plan', [_API, _AccountId, RatedeckId]}
              ,APIResult
              ) ->
     PlanId = service_plan_id(RatedeckId),
-    'undefined' =/=
-        kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, PlanId]
-                         ,kz_json:decode(APIResult)
-                         );
+    case pqc_kazoo_model:does_service_plan_exist(Model, PlanId) of
+        'true' ->
+            'undefined' =/=
+                kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, PlanId]
+                                 ,kz_json:decode(APIResult)
+                                 );
+        'false' ->
+            ?FAILED_RESPONSE
+    end;
+postcondition(_Model
+             ,{'call', ?MODULE, 'rate_account_did', [_API, 'undefined', _DID]}
+             ,?FAILED_RESPONSE
+             ) ->
+    'true';
 postcondition(Model
              ,{'call', ?MODULE, 'rate_account_did', [_API, AccountId, DID]}
              ,APIResult

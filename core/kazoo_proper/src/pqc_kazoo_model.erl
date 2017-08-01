@@ -11,6 +11,7 @@
          %% Predicates
         ,has_accounts/1
         ,does_account_exist/2
+        ,does_service_plan_exist/2
         ,is_account_missing/2
         ,is_number_in_account/3
         ,is_number_missing_in_account/3
@@ -18,7 +19,7 @@
         ,has_rate_matching/3, has_service_plan_rate_matching/3
 
          %% Model manipulations
-        ,add_service_plan/2
+        ,add_service_plan/2, add_service_plan/3
         ,add_account/3
         ,add_service_plan_to_account/3
         ,add_number_to_account/4
@@ -128,6 +129,10 @@ does_account_exist(Accounts, AccountId) ->
 is_account_missing(#kazoo_model{}=Model, Id) ->
     not does_account_exist(Model, Id).
 
+-spec does_service_plan_exist(model(), ne_binary()) -> boolean().
+does_service_plan_exist(#kazoo_model{'service_plans'=Plans}, PlanId) ->
+    lists:member(PlanId, Plans).
+
 -spec is_number_in_account(model(), ne_binary(), ne_binary()) -> boolean().
 is_number_in_account(#kazoo_model{}=Model, AccountId, Number) ->
     case number_data(Model, Number) of
@@ -180,8 +185,15 @@ add_number_to_account(#kazoo_model{'numbers'=Numbers}=Model, AccountId, Number, 
     Model#kazoo_model{'numbers'=Numbers#{Number => NumberData}}.
 
 -spec add_service_plan(model(), ne_binary()) -> model().
-add_service_plan(#kazoo_model{'service_plans'=Plans}=Model, Plan) ->
-    Model#kazoo_model{'service_plans'=lists:usort([Plan | Plans])}.
+-spec add_service_plan(model(), ne_binary(), ne_binary()) -> model().
+add_service_plan(#kazoo_model{'service_plans'=Plans}=Model, ServicePlanId) ->
+    Model#kazoo_model{'service_plans'=lists:usort([ServicePlanId | Plans])}.
+
+add_service_plan(Model, AccountId, ServicePlanId) ->
+    add_service_plan_to_account(add_service_plan(Model, ServicePlanId)
+                               ,AccountId
+                               ,ServicePlanId
+                               ).
 
 -spec add_service_plan_to_account(model(), ne_binary(), ne_binary()) -> model().
 add_service_plan_to_account(#kazoo_model{'accounts'=Accounts}=Model, AccountId, ServicePlanId) ->
