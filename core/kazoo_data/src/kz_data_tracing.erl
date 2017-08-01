@@ -3,6 +3,7 @@
 
 -export([start_link/0
         ,status/0, status/1
+        ,clear_all_traces/0
         ]).
 
 -export([init/1
@@ -80,6 +81,10 @@ status() ->
 status(Ref) ->
     gen_server:call(?MODULE, {'status', Ref}).
 
+-spec clear_all_traces() -> 'ok'.
+clear_all_traces() ->
+    gen_server:call(?MODULE, 'clear_all_traces', 1 * ?MILLISECONDS_IN_MINUTE).
+
 -spec stop_trace(ne_binary()) ->
                         {'ok', file:filename_all()} |
                         {'error', trace_error()}.
@@ -110,6 +115,13 @@ handle_call('status', _From, #state{traces=Traces}=State) ->
     {'reply', Traces, State};
 handle_call({'status', Ref}, _From, #state{traces=Traces}=State) ->
     {'reply', lists:keyfind(Ref, 1, Traces), State};
+handle_call('clear_all_traces', _From, #state{traces=Traces}=State) ->
+    {'reply'
+    ,[{Ref, stop_trace_file(TraceResult)}
+      || {Ref, _Filename, TraceResult} <- Traces
+     ]
+    ,State#state{traces=[]}
+    };
 handle_call({'stop_trace', TraceRef}
            ,_From
            ,#state{traces=Traces}=State
