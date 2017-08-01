@@ -26,7 +26,14 @@ transition_if_fold({Fun, Args}, {'true', Model}) ->
 
 -spec run_counterexample(module()) -> {integer(), module(), any()}.
 run_counterexample(PQC) ->
-    run_counterexample(PQC, proper:counterexample(), PQC:initial_state()).
+    try run_counterexample(PQC, proper:counterexample(), PQC:initial_state()) of
+        OK -> OK
+    catch
+        E:R -> {E, R, erlang:get_stacktrace()}
+    after
+        PQC:cleanup()
+    end.
+
 run_counterexample(PQC, [{Seq, Threads}], State) ->
     Steps = lists:usort(fun sort_steps/2, Seq ++ lists:flatten(Threads)),
     lists:foldl(fun run_step/2, {0, PQC, State}, Steps);
@@ -41,7 +48,18 @@ run_step({'set', Var, Call}, {Step, PQC, State}) ->
 
 run_call(_Var, {'call', M, F, Args}=Call, {Step, PQC, State}) ->
     io:format('user', "(~p) ~p:~p(~p) -> ", [Step, M, F, Args]),
-    Resp = erlang:apply(M, F, Args),
+    Args1 = resolve_args(Args),
+    Resp = erlang:apply(M, F, Args1),
     io:format('user', "~p~n~n", [Resp]),
     'true' = PQC:postcondition(State, Call, Resp),
     {Step+1, PQC, PQC:next_state(State, Resp, Call)}.
+
+resolve_args(Args) ->
+    [resolve_arg(Arg) || Arg <- Args].
+
+resolve_arg({'call', M, F, Args}) ->
+    io:format("  resolving ~p:~p(~p)~n", [M, F, Args]),
+    Args1 = resolve_args(Args),
+    io:format("  resolved ~p:~p(~p)~n", [M, F, Args1]),
+    erlang:apply(M, F, Args1);
+resolve_arg(Arg) -> Arg.
