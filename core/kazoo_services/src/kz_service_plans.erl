@@ -71,7 +71,7 @@ find_reseller_id(ServicesJObj) ->
 %%--------------------------------------------------------------------
 -spec public_json(plans()) -> kz_json:object().
 public_json(ServicePlans) ->
-    PlansJObj = lists:foldl(fun merge_service_plans/2, kz_json:object(), ServicePlans),
+    PlansJObj = lists:foldl(fun merge_service_plans/2, kz_json:new(), ServicePlans),
     kzd_service_plan:set_plan(kzd_service_plan:new(), PlansJObj).
 
 -spec merge_service_plans(plan(), kz_json:object()) -> kz_json:object().
