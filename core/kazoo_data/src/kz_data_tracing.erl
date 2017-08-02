@@ -83,7 +83,7 @@ status(Ref) ->
 
 -spec clear_all_traces() -> 'ok'.
 clear_all_traces() ->
-    gen_server:call(?MODULE, 'clear_all_traces', 1 * ?MILLISECONDS_IN_MINUTE).
+    gen_server:call(?MODULE, 'clear_all_traces', 1 * ?MILLISECONDS_IN_HOUR).
 
 -spec stop_trace(ne_binary()) ->
                         {'ok', file:filename_all()} |
