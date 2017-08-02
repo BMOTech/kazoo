@@ -87,16 +87,19 @@ rate_account_did(API, AccountId, DID) ->
 
 -spec ratedeck_service_plan(ne_binary() | kzd_rate:doc()) -> kzd_service_plan:doc().
 ratedeck_service_plan(<<_/binary>> = RatedeckId) ->
-    kz_json:from_list([{<<"_id">>, service_plan_id(RatedeckId)}
-                      ,{<<"pvt_type">>, <<"service_plan">>}
-                      ,{<<"name">>, <<RatedeckId/binary, " Ratedeck Service Plan">>}
-                      ,{<<"plans">>
-                       ,kz_json:from_list([{<<"ratedeck">>
-                                           ,kz_json:from_list([{RatedeckId, kz_json:new()}])
-                                           }
-                                          ])
-                       }
-                      ]);
+    Plan = kz_json:from_list([{<<"ratedeck">>
+                              ,kz_json:from_list([{RatedeckId, kz_json:new()}])
+                              }
+                             ]),
+    Funs = [{fun kzd_service_plan:set_plan/2, Plan}],
+
+    lists:foldl(fun({F, V}, Acc) -> F(Acc, V) end
+               ,kz_json:from_list([{<<"_id">>, service_plan_id(RatedeckId)}
+                                  ,{<<"pvt_type">>, <<"service_plan">>}
+                                  ,{<<"name">>, <<RatedeckId/binary, " Ratedeck Service Plan">>}
+                                  ])
+               ,Funs
+               );
 ratedeck_service_plan(RateDoc) ->
     ratedeck_service_plan(kzd_rate:ratedeck(RateDoc)).
 
