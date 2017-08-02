@@ -112,7 +112,13 @@ postcondition(Model
              ) ->
     case pqc_kazoo_model:account_id_by_name(Model, Name) of
         'undefined' ->
+            ?INFO("no account by the name of ~s, should be an account id in ~s"
+                 ,[Name, APIResult]
+                 ),
             'undefined' =/= pqc_cb_response:account_id(APIResult);
         _AccountId ->
+            ?INFO("account ~s (~s) found, API should be an error: ~s"
+                 ,[Name, _AccountId, APIResult]
+                 ),
             500 =:= pqc_cb_response:error_code(APIResult)
     end.
