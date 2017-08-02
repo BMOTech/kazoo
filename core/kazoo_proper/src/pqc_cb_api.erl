@@ -114,8 +114,7 @@ request_headers(#{'auth_token' := AuthToken
     lager:md([{'request_id', RequestId}]),
     props:set_values(RequestHeaders
                     ,[{<<"x-auth-token">>, kz_term:to_list(AuthToken)}
-                     ,{<<"x-request-id">>, kz_term:to_list(RequestId)}
-                      | default_request_headers()
+                      | default_request_headers(RequestId)
                      ]
                     ).
 
@@ -127,7 +126,9 @@ default_request_headers() ->
     ].
 
 default_request_headers(RequestId) ->
-    [{<<"x-reqeuest-id">>, RequestId} | default_request_headers()].
+    [{<<"x-request-id">>, kz_term:to_list(RequestId)}
+     | default_request_headers()
+    ].
 
 -type expected_codes() :: [integer()].
 -type response() :: binary() |
@@ -182,13 +183,9 @@ start_trace(RequestId) ->
     put('now', kz_time:now()),
     TraceFile = "/tmp/" ++ kz_term:to_list(RequestId) ++ ".log",
 
-    {'ok', _}=Trace = kz_data_tracing:trace_file([{'any', [glc_ops:eq('request_id', RequestId)
-                                                          ,glc_ops:eq('pid', pid_to_list(self()))
-                                                          ]
-                                                  }
-                                                 ]
-                                                ,TraceFile
-                                                ,?TRACE_FORMAT
-                                                ),
+    {'ok', _}=OK = kz_data_tracing:trace_file([glc_ops:eq('request_id', RequestId)]
+                                             ,TraceFile
+                                             ,?TRACE_FORMAT
+                                             ),
     ?INFO("authenticating...~s", [RequestId]),
-    Trace.
+    OK.
