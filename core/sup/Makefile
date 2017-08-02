@@ -1,10 +1,13 @@
 ROOT = ../..
 PROJECT = sup
 
-all: sup
+all: ebin/sup.app sup
+
+ebin/sup.app:
+	@$(REBAR) compile
 
 sup:
-	@$(REBAR) compile escriptize
+	@$(REBAR) escriptize
 
 clean:
 	rm ./sup
