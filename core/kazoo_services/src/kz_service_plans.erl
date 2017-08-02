@@ -72,6 +72,7 @@ find_reseller_id(ServicesJObj) ->
 -spec public_json(plans()) -> kz_json:object().
 public_json(ServicePlans) ->
     PlansJObj = lists:foldl(fun merge_service_plans/2, kz_json:new(), ServicePlans),
+    lager:info("plans found: ~p", [PlansJObj]),
     kzd_service_plan:set_plan(kzd_service_plan:new(), PlansJObj).
 
 -spec merge_service_plans(plan(), kz_json:object()) -> kz_json:object().
@@ -80,7 +81,16 @@ merge_service_plans(#kz_service_plans{plans=Plans}, PlansJObj) ->
 
 -spec merge_plans(kzd_service_plan:doc(), kz_json:object()) -> kz_json:object().
 merge_plans(SerivcePlan, PlansJObj) ->
-    kz_json:merge(PlansJObj, kzd_service_plan:plan(SerivcePlan)).
+    case kzd_service_plan:plan(SerivcePlan, 'undefined') of
+        'undefined' ->
+            lager:info("no service plan in ~p", [SerivcePlan]),
+            PlansJObj;
+        Plan ->
+            lager:info("kz_json:merge(~p, ~p)"
+                      ,[PlansJObj, Plan]
+                      ),
+            kz_json:merge(PlansJObj, Plan)
+    end.
 
 %%--------------------------------------------------------------------
 %% @public
