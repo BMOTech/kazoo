@@ -23,7 +23,6 @@ delete_service_plan(_API, ServicePlanId) ->
     {'ok', MasterAccountDb} = kapps_util:get_master_account_db(),
     kz_datamgr:del_doc(MasterAccountDb, ServicePlanId).
 
-
 -spec assign_service_plan(pqc_cb_api:state(), ne_binary() | proper_types:type(), ne_binary()) -> pqc_cb_api:response().
 assign_service_plan(API, AccountId, ServicePlanId) ->
     URL = account_service_plan_url(AccountId),
@@ -32,7 +31,7 @@ assign_service_plan(API, AccountId, ServicePlanId) ->
     RequestData = kz_json:from_list([{<<"add">>, [ServicePlanId]}]),
     RequestEnvelope = pqc_cb_api:create_envelope(RequestData),
 
-    pqc_cb_api:make_request([200]
+    pqc_cb_api:make_request([200, 404]
                            ,fun kz_http:post/3
                            ,URL
                            ,RequestHeaders
