@@ -192,6 +192,7 @@ post(Context) ->
                           ,kz_services:fetch(cb_context:account_id(Context))
                           ,Routines
                           ),
+    lager:info("updated services: ~p~n", [Services]),
     cb_context:setters(Context
                       ,[{fun cb_context:set_resp_data/2, kz_services:service_plan_json(Services)}
                        ,{fun cb_context:set_resp_status/2, 'success'}
