@@ -86,14 +86,14 @@ has_rate_matching(#kazoo_model{'ratedecks'=Ratedecks}, RatedeckId, DID) ->
 has_service_plan_rate_matching(#kazoo_model{'accounts'=Accounts
                                            ,'service_plans'=SPs
                                            ,'ratedecks'=Ratedecks
-                                           }
+                                           }=Model
                               ,AccountId
                               ,DID
                               ) ->
     Account = maps:get(AccountId, Accounts, #{}),
-    case maps:get('service_plans', Account) of
-        'undefined' -> 'false';
-        [] -> 'false';
+    case maps:get('service_plans', Account, []) of
+        [] ->
+            has_rate_matching(Model, ?KZ_RATES_DB, DID);
         [SP] ->
             case lists:member(SP, SPs) of
                 'false' -> 'false';
@@ -117,7 +117,10 @@ has_rate_matching(Ratedeck, Number) ->
 
 -spec account_id_by_name(model(), ne_binary()) -> api_ne_binary().
 account_id_by_name(#kazoo_model{'accounts'=Accounts}, Name) ->
-    maps:get(Name, Accounts, 'undefined').
+    case maps:get(Name, Accounts, 'undefined') of
+        #{'id' := AccountId} -> AccountId;
+        _ -> 'undefined'
+    end.
 
 -spec does_account_exist(model() | map(), ne_binary()) -> boolean().
 does_account_exist(#kazoo_model{'accounts'=Accounts}, AccountId) ->
