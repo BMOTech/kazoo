@@ -206,15 +206,23 @@ correct() ->
            ,commands(?MODULE)
            ,?TRAPEXIT(
                begin
-                   {History, Model, Result} = run_commands(?MODULE, Cmds),
+                   try run_commands(?MODULE, Cmds) of
+                       {History, Model, Result} ->
+                           cleanup(pqc_kazoo_model:api(Model)),
+                           ?WHENFAIL(io:format("Final Model : ~p~nFailing Cmds: ~p~n"
+                                              ,[Model, zip(Cmds, History)]
+                                              )
+                                    ,aggregate(command_names(Cmds), Result =:= 'ok')
+                                    )
+                   catch
+                       _E:_R ->
+                           ST = erlang:get_stacktrace(),
+                           io:format("exception running commands: ~s:~p~n", [_E, _R]),
+                           [io:format("~p~n", [S]) || S <- ST],
+                           cleanup(),
+                           'false'
+                   end
 
-                   cleanup(pqc_kazoo_model:api(Model)),
-
-                   ?WHENFAIL(io:format("Final Model : ~p~nFailing Cmds: ~p~n"
-                                      ,[Model, zip(Cmds, History)]
-                                      )
-                            ,aggregate(command_names(Cmds), Result =:= 'ok')
-                            )
                end
               )
            ).
@@ -248,13 +256,15 @@ init() ->
 
 -spec cleanup() -> 'ok'.
 cleanup() ->
+    kz_data_tracing:clear_all_traces(),
     cleanup(pqc_cb_api:authenticate()).
 
 cleanup(API) ->
     ?INFO("CLEANUP TIME, EVERYBODY HELPS"),
     _ = [?MODULE:delete_rate(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
     _ = pqc_cb_accounts:cleanup_accounts(API, ?ACCOUNT_NAMES),
-    _ = [pqc_cb_service_plans:delete_service_plan(API, RatedeckId) || RatedeckId <- ?RATEDECK_NAMES],
+    _DelSPs = [pqc_cb_service_plans:delete_service_plan(API, service_plan_id(RatedeckId)) || RatedeckId <- ?RATEDECK_NAMES],
+
     pqc_cb_api:cleanup(API).
 
 -spec initial_state() -> pqc_kazoo_model:model().
@@ -398,7 +408,7 @@ next_state(Model
     pqc_util:transition_if(Model
                           ,[{fun pqc_kazoo_model:does_account_exist/2, [AccountId]}
                            ,{fun pqc_kazoo_model:does_service_plan_exist/2, [PlanId]}
-                           ,{fun pqc_kazoo_model:add_service_plan/2, [AccountId, RatedeckId]}
+                           ,{fun pqc_kazoo_model:add_service_plan/3, [AccountId, PlanId]}
                            ]
                           );
 next_state(Model
@@ -454,13 +464,13 @@ postcondition(Model
         'true' ->
             ?INFO("model has service plan ~s, is assigned to account ~s: ~s", [PlanId, _AccountId, APIResult]),
             'undefined' =/=
-                kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, PlanId]
+                kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, RatedeckId]
                                  ,kz_json:decode(APIResult)
                                  );
         'false' ->
             ?INFO("model does not have service plan ~s, API should not have it listed: ~s", [PlanId, APIResult]),
             'undefined' =:=
-                kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, PlanId]
+                kz_json:get_value([<<"data">>, <<"plan">>, <<"ratedeck">>, RatedeckId]
                                  ,kz_json:decode(APIResult)
                                  )
     end;
