@@ -640,7 +640,9 @@ current_service_status(AccountId) ->
 %%--------------------------------------------------------------------
 -spec service_plan_json(ne_binary() | services()) -> kzd_service_plan:doc().
 service_plan_json(#kz_services{jobj=ServicesJObj}) ->
+    lager:info("services jobj: ~p", [ServicesJObj]),
     Plans = kz_service_plans:from_service_json(ServicesJObj),
+    lager:info("service plans: ~p", [Plans]),
     kz_service_plans:public_json(Plans);
 service_plan_json(<<_/binary>> = Account) ->
     service_plan_json(fetch(Account)).

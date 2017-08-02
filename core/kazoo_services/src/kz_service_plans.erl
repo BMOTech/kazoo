@@ -56,7 +56,7 @@ from_service_json(ServicesJObj) ->
     lager:info("plan ids: ~p", [PlanIds]),
     get_plans(PlanIds, ResellerId, ServicesJObj).
 
--spec find_reseller_id(kzd_services:doc()) -> api_binary().
+-spec find_reseller_id(kzd_services:doc()) -> api_ne_binary().
 find_reseller_id(ServicesJObj) ->
     case kzd_services:reseller_id(ServicesJObj) of
         'undefined' -> kz_json:get_ne_binary_value(<<"reseller_id">>, ServicesJObj);
@@ -69,20 +69,18 @@ find_reseller_id(ServicesJObj) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec public_json(plans()) -> kzd_service_plan:doc().
+-spec public_json(plans()) -> kz_json:object().
 public_json(ServicePlans) ->
-    public_json(ServicePlans, kz_json:new()).
+    PlansJObj = lists:foldl(fun merge_service_plans/2, kz_json:object(), ServicePlans),
+    kzd_service_plan:set_plan(kzd_service_plan:new(), PlansJObj).
 
--spec public_json(plans(), kz_json:object()) -> kzd_service_plan:doc().
-public_json([], JObj) ->
-    kzd_service_plan:set_plan(kzd_service_plan:new(), JObj);
-public_json([#kz_service_plans{plans=Plans}|ServicePlans], JObj) ->
-    NewJObj = lists:foldl(fun merge_plans/2, JObj, Plans),
-    public_json(ServicePlans, NewJObj).
+-spec merge_service_plans(plan(), kz_json:object()) -> kz_json:object().
+merge_service_plans(#kz_service_plans{plans=Plans}, PlansJObj) ->
+    lists:foldl(fun merge_plans/2, PlansJObj, Plans).
 
 -spec merge_plans(kzd_service_plan:doc(), kz_json:object()) -> kz_json:object().
-merge_plans(SerivcePlan, JObj) ->
-    kz_json:merge(JObj, kzd_service_plan:plan(SerivcePlan)).
+merge_plans(SerivcePlan, PlansJObj) ->
+    kz_json:merge(PlansJObj, kzd_service_plan:plan(SerivcePlan)).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -224,7 +222,7 @@ get_plan(PlanId, ResellerId, Services, ServicePlans) ->
     lager:info("vendor ~s overrides: ~p", [VendorId, Overrides]),
     case maybe_fetch_vendor_plan(PlanId, VendorId, ResellerId, Overrides) of
         'undefined' -> ServicePlans;
-        Plan -> append_vendor_plan(Plan, VendorId, ServicePlans)
+        ServicePlan -> append_vendor_plan(ServicePlan, VendorId, ServicePlans)
     end.
 
 %%--------------------------------------------------------------------
@@ -234,7 +232,7 @@ get_plan(PlanId, ResellerId, Services, ServicePlans) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec maybe_fetch_vendor_plan(ne_binary(), ne_binary(), ne_binary(), kz_json:object()) ->
-                                     api_object().
+                                     kzd_service_plan:api_doc().
 maybe_fetch_vendor_plan(PlanId, VendorId, VendorId, Overrides) ->
     AreOverridesEmpty = kz_json:is_empty(Overrides),
 
@@ -258,7 +256,7 @@ maybe_fetch_vendor_plan(PlanId, _, ResellerId, _) ->
 %% for that vendor, creating a new list (record) if not present.
 %% @end
 %%--------------------------------------------------------------------
--spec append_vendor_plan(kz_json:object(), ne_binary(), plans()) -> plans().
+-spec append_vendor_plan(kzd_service_plan:doc(), ne_binary(), plans()) -> plans().
 append_vendor_plan(Plan, VendorId, ServicePlans) ->
     case lists:keyfind(VendorId, #kz_service_plans.vendor_id, ServicePlans) of
         'false' ->
