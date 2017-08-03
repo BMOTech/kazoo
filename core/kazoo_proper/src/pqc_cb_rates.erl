@@ -61,11 +61,18 @@ upload_rate(API, RateDoc) ->
 -spec create_service_plan(pqc_cb_api:state(), ne_binary() | proper_types:type()) ->
                                  'ok' | {'error', any()}.
 create_service_plan(API, RatedeckId) ->
-    ?INFO("creating service plan for ~s", [RatedeckId]),
-    case pqc_cb_service_plans:create_service_plan(API, ratedeck_service_plan(RatedeckId)) of
-        {'ok', _} -> 'ok';
-        {'error', 'conflict'} -> 'ok';
-        Error -> Error
+    RatesResp = get_rates(API, RatedeckId),
+    case kz_json:get_list_value(<<"data">>, kz_json:decode(RatesResp), []) of
+        [] ->
+            ?INFO("no rates in ratedeck ~s, not creating service plan", [RatedeckId]),
+            {'error', 'no_ratedeck'};
+        _Rates ->
+            ?INFO("creating service plan for ~s", [RatedeckId]),
+            case pqc_cb_service_plans:create_service_plan(API, ratedeck_service_plan(RatedeckId)) of
+                {'ok', _} -> 'ok';
+                {'error', 'conflict'} -> 'ok';
+                Error -> Error
+            end
     end.
 
 -spec assign_service_plan(pqc_cb_api:state(), ne_binary() | proper_types:type(), ne_binary()) ->
@@ -398,7 +405,9 @@ next_state(Model
           ) ->
     PlanId = service_plan_id(RatedeckId),
     pqc_util:transition_if(Model
-                          ,[{fun pqc_kazoo_model:add_service_plan/2, [PlanId]}]
+                          ,[{fun pqc_kazoo_model:does_ratedeck_exist/2, [RatedeckId]}
+                           ,{fun pqc_kazoo_model:add_service_plan/2, [PlanId]}
+                           ]
                           );
 next_state(Model
           ,_APIResp
@@ -444,11 +453,14 @@ postcondition(Model
              ,APIResult
              ) ->
     matches_cost(Model, RatedeckId, PhoneNumber, APIResult);
-postcondition(_Model
-             ,{'call', ?MODULE, 'create_service_plan', [_API, _RatedeckId]}
+postcondition(Model
+             ,{'call', ?MODULE, 'create_service_plan', [_API, RatedeckId]}
              ,APIResult
              ) ->
-    'ok' =:= APIResult;
+    case pqc_kazoo_model:does_ratedeck_exist(Model, RatedeckId) of
+        'true' -> 'ok' =:= APIResult;
+        'false' -> {'error', 'no_ratedeck'} =:= APIResult
+    end;
 postcondition(_Model
              ,{'call', ?MODULE, 'assign_service_plan', [_API, 'undefined', _RatedeckId]}
              ,?FAILED_RESPONSE

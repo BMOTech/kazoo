@@ -16,6 +16,7 @@
         ,is_number_in_account/3
         ,is_number_missing_in_account/3
         ,is_rate_missing/3, does_rate_exist/3
+        ,does_ratedeck_exist/2
         ,has_rate_matching/3, has_service_plan_rate_matching/3
 
          %% Model manipulations
@@ -157,6 +158,10 @@ is_rate_missing(#kazoo_model{'ratedecks'=Ratedecks}, RatedeckId, RateDoc) ->
 -spec does_rate_exist(model(), ne_binary(), kzd_rate:doc()) -> boolean().
 does_rate_exist(Model, RatedeckId, RateDoc) ->
     not is_rate_missing(Model, RatedeckId, RateDoc).
+
+-spec does_ratedeck_exist(model(), ne_binary()) -> boolean().
+does_ratedeck_exist(#kazoo_model{'ratedecks'=Ratedecks}, RatedeckId) ->
+    is_map(maps:get(RatedeckId, Ratedecks, 'undefined')).
 
 -spec add_account(model(), ne_binary(), pqc_cb_api:response()) -> model().
 add_account(#kazoo_model{'accounts'=Accounts}=State, Name, APIResp) ->
