@@ -364,7 +364,7 @@ Since the "retail" ratedeck is the default, no service plan is necessary. Let's 
     "_id":"plan_bulk_ratedeck",
     "pvt_type":"service_plan",
     "name":"Bulk Ratedeck Service Plan",
-    "plans":{
+    "plan":{
         "ratedeck":{
             "bulk":{
             }
