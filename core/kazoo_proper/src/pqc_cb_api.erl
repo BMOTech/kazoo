@@ -9,6 +9,8 @@
         ,make_request/4, make_request/5
 
         ,cleanup/1
+
+        ,set_log_level/1
         ]).
 
 -include("kazoo_proper.hrl").
@@ -139,12 +141,12 @@ default_request_headers(RequestId) ->
 -spec make_request(expected_codes(), fun(), string(), kz_proplist(), iodata()) -> response().
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders) ->
     ?INFO("~p: ~s", [HTTP, URL]),
-    ?INFO("headers: ~p", [RequestHeaders]),
+    ?DEBUG("headers: ~p", [RequestHeaders]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders)).
 make_request(ExpectedCodes, HTTP, URL, RequestHeaders, RequestBody) ->
     ?INFO("~p: ~s", [HTTP, URL]),
-    ?INFO("headers: ~p", [RequestHeaders]),
-    ?INFO("body: ~s", [RequestBody]),
+    ?DEBUG("headers: ~p", [RequestHeaders]),
+    ?DEBUG("body: ~s", [RequestBody]),
     handle_response(ExpectedCodes, HTTP(URL, RequestHeaders, iolist_to_binary(RequestBody))).
 
 -spec create_envelope(kz_json:object()) ->
@@ -158,13 +160,13 @@ create_envelope(Data, Envelope) ->
 
 -spec handle_response(expected_codes(), kz_http:ret()) -> response().
 handle_response(ExpectedCode, {'ok', ExpectedCode, _RespHeaders, RespBody}) ->
-    ?INFO("recv expected ~p: ~s", [ExpectedCode, RespBody]),
+    ?DEBUG("recv expected ~p: ~s", [ExpectedCode, RespBody]),
     RespBody;
 handle_response(ExpectedCodes, {'ok', ActualCode, _RespHeaders, RespBody})
   when is_list(ExpectedCodes) ->
     case lists:member(ActualCode, ExpectedCodes) of
         'true' ->
-            ?INFO("recv expected ~p: ~s", [ActualCode, RespBody]),
+            ?DEBUG("recv expected ~p: ~s", [ActualCode, RespBody]),
             RespBody;
         'false' ->
             ?ERROR("failed to get any ~w: ~p: ~s"
@@ -179,6 +181,7 @@ handle_response(_ExpectedCode, {'ok', _ActualCode, _RespHeaders, RespBody}) ->
     ?ERROR("failed to get ~w: ~p: ~s", [_ExpectedCode, _ActualCode, RespBody]),
     {'error', RespBody}.
 
+-spec start_trace(ne_binary()) -> {'ok', any()}.
 start_trace(RequestId) ->
     lager:md([{'request_id', RequestId}]),
     put('now', kz_time:now()),
@@ -187,6 +190,17 @@ start_trace(RequestId) ->
     {'ok', _}=OK = kz_data_tracing:trace_file([glc_ops:eq('request_id', RequestId)]
                                              ,TraceFile
                                              ,?TRACE_FORMAT
+                                             ,get_log_level()
                                              ),
     ?INFO("authenticating...~s", [RequestId]),
     OK.
+
+-spec set_log_level(atom()) -> atom().
+set_log_level(LogLevel) ->
+    put('log_level', LogLevel).
+
+get_log_level() ->
+    case get('log_level') of
+        'undefined' -> 'debug';
+        LogLevel -> LogLevel
+    end.
