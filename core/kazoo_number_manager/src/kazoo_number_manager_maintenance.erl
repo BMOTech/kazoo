@@ -65,8 +65,8 @@
 
 -define(LOG(Format, Args)
        ,begin
-            lager:debug(Format, Args),
-            io:format(Format ++ "\n", Args)
+            lager:debug(Format, Args)
+            %% io:format(Format ++ "\n", Args)
         end
        ).
 
