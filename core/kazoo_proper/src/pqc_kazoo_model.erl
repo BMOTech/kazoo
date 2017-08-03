@@ -1,6 +1,7 @@
 -module(pqc_kazoo_model).
 
 -export([new/1
+        ,pp/1 % pretty print kazoo model
 
          %% Getters
         ,api/1
@@ -60,6 +61,21 @@
 -spec new(pqc_cb_api:state()) -> model().
 new(API) ->
     #kazoo_model{'api'=API}.
+
+-spec pp(model()) -> kz_proplist().
+pp(#kazoo_model{accounts=Account
+               ,numbers=Numbers
+               ,ratedecks=Ratedecks
+               ,service_plans=ServicePlans
+               ,api=API
+               }
+  ) ->
+    [{accounts,Account}
+    ,{numbers,Numbers}
+    ,{ratedecks,Ratedecks}
+    ,{service_plans=ServicePlans}
+    ,{api,API}
+    ].
 
 -spec api(model()) -> pqc_cb_api:state().
 api(#kazoo_model{'api'=API}) -> API.

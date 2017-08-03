@@ -216,8 +216,8 @@ correct() ->
                    try run_commands(?MODULE, Cmds) of
                        {History, Model, Result} ->
                            cleanup(pqc_kazoo_model:api(Model)),
-                           ?WHENFAIL(io:format("Final Model : ~p~nFailing Cmds: ~p~n"
-                                              ,[Model, zip(Cmds, History)]
+                           ?WHENFAIL(io:format("Final Model:~n~p~n~nFailing Cmds:~n~p~n"
+                                              ,[pqc_kazoo_model:pp(Model), zip(Cmds, History)]
                                               )
                                     ,aggregate(command_names(Cmds), Result =:= 'ok')
                                     )
