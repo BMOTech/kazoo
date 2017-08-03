@@ -308,7 +308,7 @@ seq() ->
             'true' -> ?INFO("created account ~s~n", [AccountId]);
             'false' ->
                 ?INFO("failed to get account id from ~s~n", [AccountResp]),
-                throw(no_account_id)
+                throw('no_account_id')
         end,
 
         PlanId = service_plan_id(kzd_rate:ratedeck(RateDoc)),
@@ -319,7 +319,7 @@ seq() ->
         of
             'undefined' ->
                 ?ERROR("failed to assign plan ~s to account ~s", [PlanId, AccountId]),
-                throw(no_plan);
+                throw('no_plan');
             _ ->
                 ?INFO("assigned service plan to account: ~p~n", [_Assigned])
         end,
@@ -458,8 +458,16 @@ postcondition(Model
              ,APIResult
              ) ->
     case pqc_kazoo_model:does_ratedeck_exist(Model, RatedeckId) of
-        'true' -> 'ok' =:= APIResult;
-        'false' -> {'error', 'no_ratedeck'} =:= APIResult
+        'true' ->
+            ?INFO("ratedeck ~s exists, creating service plan should succeed: ~p"
+                 ,[RatedeckId, APIResult]
+                 ),
+            'ok' =:= APIResult;
+        'false' ->
+            ?INFO("ratedeck ~s does not exist, creating service plan should fail: ~p"
+                 ,[RatedeckId, APIResult]
+                 ),
+            {'error', 'no_ratedeck'} =:= APIResult
     end;
 postcondition(_Model
              ,{'call', ?MODULE, 'assign_service_plan', [_API, 'undefined', _RatedeckId]}
