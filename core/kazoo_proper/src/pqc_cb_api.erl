@@ -126,7 +126,8 @@ default_request_headers() ->
     ].
 
 default_request_headers(RequestId) ->
-    [{<<"x-request-id">>, kz_term:to_list(RequestId)}
+    NowMS = kz_time:now_ms(),
+    [{<<"x-request-id">>, kz_term:to_list(RequestId) ++ "-" ++ integer_to_list(NowMS)}
      | default_request_headers()
     ].
 
