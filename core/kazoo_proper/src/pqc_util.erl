@@ -1,6 +1,7 @@
 -module(pqc_util).
 
 -export([transition_if/2
+        ,simple_counterexample/0
         ,run_counterexample/1
         ]).
 
@@ -23,6 +24,22 @@ transition_if_fold({Fun, Args}, {'true', Model}) ->
         {'true', _NewState}=True -> True;
         NewModel -> {'true', NewModel}
     end.
+
+-spec simple_counterexample() -> [{module(), function(), list()}].
+simple_counterexample() ->
+    simple_counterexample(proper:counterexample()).
+
+simple_counterexample([Seq]) ->
+    [{M, F, ['{API}'|cleanup_args(Args)]}
+     || {set, _Var, {call, M, F, [_|Args]}} <- Seq
+    ].
+
+cleanup_args(Args) ->
+    [cleanup_arg(Arg) || Arg <- Args].
+cleanup_arg({call, M, F, Args}) ->
+    {M,F, length(Args)};
+cleanup_arg(Arg) -> Arg.
+
 
 -spec run_counterexample(module()) -> {integer(), module(), any()}.
 run_counterexample(PQC) ->
