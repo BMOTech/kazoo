@@ -5,7 +5,7 @@ System administrators can create multiple ratedecks and assign them to accounts 
 
 ## High level overview
 
-1.  Admins can create ratedecks by uploading CSVs to the [Tasks API](/applications/crossbar/doc/tasks.md) and defining the \`ratedeck\_name\`. See the [Rate Task](/applications/tasks/doc/rates.md) docs for how to upload the CSV. This will be covered further down too.
+1.  Admins can create ratedecks by uploading CSVs to the [Tasks API](/applications/crossbar/doc/tasks.md) and defining the \`ratedeck\_id\`. See the [Rate Task](/applications/tasks/doc/rates.md) docs for how to upload the CSV. This will be covered further down too.
 2.  Admins can then create [Service Plans](/applications/crossbar/doc/service_plans.md) that incorporate the ratedeck(s) available. You can optionally charge for access to these ratedecks as part of the service plan.
 3.  Now admins can assign these service plans to an account or reseller. When rating a call, the system will look at the account, then the reseller, and finally the default system ratedeck looking for what ratedeck(s) to use.
 
@@ -60,7 +60,7 @@ Looking at the [Rates Task](/applications/tasks/doc/rates.md) we see the followi
     `rate_nocharge_time`|"free" call time, if call duration less then this value (seconds), then call not charged|
     `rate_surcharge`|charge amount on connect (answer)|
     `rate_version`|rate version|
-    `ratedeck_name`| ratedeck name, assigned to account via service plan|
+    `ratedeck_id`| ratedeck name, assigned to account via service plan|
 
 You can also query to the rates task to find this information out:
 
@@ -268,7 +268,7 @@ Save this as 'simple\_rates.csv' so we can upload it.
 
 ### Uploading a second ratedeck
 
-Now that we've populated a "default" ratedeck, let's create a new ratedeck by adding the "ratedeck\_name" field to a CSV. We'll just edit "simple\_rates.csv" and re-save it as "bulk\_rates.csv":
+Now that we've populated a "default" ratedeck, let's create a new ratedeck by adding the `ratedeck_id` field to a CSV. We'll just edit "simple\_rates.csv" and re-save it as "bulk\_rates.csv":
 
 ```csv
 "rate_cost","description","name","prefix","ratedeck_id"
