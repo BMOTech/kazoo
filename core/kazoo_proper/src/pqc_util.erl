@@ -46,7 +46,8 @@ run_counterexample(PQC) ->
     try run_counterexample(PQC, proper:counterexample(), PQC:initial_state()) of
         OK -> OK
     catch
-        E:R -> {E, R, erlang:get_stacktrace()}
+        E:R ->
+            {E, R, erlang:get_stacktrace()}
     after
         PQC:cleanup()
     end.
@@ -65,18 +66,24 @@ run_step({'set', Var, Call}, {Step, PQC, State}) ->
 
 run_call(_Var, {'call', M, F, Args}=Call, {Step, PQC, State}) ->
     io:format('user', "(~p) ~p:~p(~p) -> ", [Step, M, F, Args]),
-    Args1 = resolve_args(Args),
+    Args1 = resolve_args(Args, pqc_kazoo_model:api(State)),
     Resp = erlang:apply(M, F, Args1),
     io:format('user', "~p~n~n", [Resp]),
-    'true' = PQC:postcondition(State, Call, Resp),
-    {Step+1, PQC, PQC:next_state(State, Resp, Call)}.
+    case PQC:postcondition(State, Call, Resp) of
+        'true' ->
+            {Step+1, PQC, PQC:next_state(State, Resp, Call)};
+        'false' ->
+            io:format("postcondition failed:~n~p~n~p~n", [State, Call]),
+            throw(failed_postcondition)
+    end.
 
-resolve_args(Args) ->
-    [resolve_arg(Arg) || Arg <- Args].
+resolve_args(Args, API) ->
+    [resolve_arg(Arg, API) || Arg <- Args].
 
-resolve_arg({'call', M, F, Args}) ->
+resolve_arg({'call', M, F, Args}, API) ->
     io:format("  resolving ~p:~p(~p)~n", [M, F, Args]),
-    Args1 = resolve_args(Args),
+    Args1 = resolve_args(Args, API),
     io:format("  resolved ~p:~p(~p)~n", [M, F, Args1]),
     erlang:apply(M, F, Args1);
-resolve_arg(Arg) -> Arg.
+resolve_arg(#{'auth_token' := _}, API) -> API; % replace old api
+resolve_arg(Arg, _API) -> Arg.
