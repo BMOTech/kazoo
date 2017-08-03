@@ -34,16 +34,18 @@
 -include_lib("kazoo_stdlib/include/kz_databases.hrl").
 
 %% #{"prefix" => cost}
--type rate_data() :: #{ne_binary() => integer()}.
+-type rate_data() :: #{ne_binary() => non_neg_integer()}.
 
--type account_data() :: #{'id' => ne_binary()
+-type account_data() :: #{'name' => ne_binary()
                          ,'service_plans' => ne_binaries()
                          }.
+%% #{AccountId => AccountData}
 -type accounts() :: #{ne_binary() => account_data()}.
 
 -type number_data() :: #{'number_state' => atom()
                         ,'account_id' => ne_binary()
                         }.
+%% #{DID => NumberData}
 -type numbers() :: #{ne_binary() => number_data()}.
 
 -record(kazoo_model
@@ -70,11 +72,11 @@ pp(#kazoo_model{accounts=Account
                ,api=API
                }
   ) ->
-    [{accounts,Account}
-    ,{numbers,Numbers}
-    ,{ratedecks,Ratedecks}
-    ,{service_plans=ServicePlans}
-    ,{api,API}
+    [{'accounts', Account}
+    ,{'numbers', Numbers}
+    ,{'ratedecks', Ratedecks}
+    ,{'service_plans', ServicePlans}
+    ,{'api', API}
     ].
 
 -spec api(model()) -> pqc_cb_api:state().
@@ -183,7 +185,7 @@ does_ratedeck_exist(#kazoo_model{'ratedecks'=Ratedecks}, RatedeckId) ->
 add_account(#kazoo_model{'accounts'=Accounts}=State, Name, APIResp) ->
     ID = {'call', 'pqc_cb_response', 'account_id', [APIResp]},
     State#kazoo_model{'accounts' = Accounts#{Name => #{'id' => ID}
-                                            ,ID => #{'name' => Name}
+                                            ,ID => new_account(Name)
                                             }}.
 
 -spec add_rate_to_ratedeck(model(), ne_binary(), kzd_rate:doc()) -> model().
@@ -208,8 +210,8 @@ remove_rate_from_ratedeck(#kazoo_model{'ratedecks'=Ratedecks}=Model, RatedeckId,
 -spec add_number_to_account(model(), ne_binary(), ne_binary(), pqc_cb_api:response()) -> model().
 add_number_to_account(#kazoo_model{'numbers'=Numbers}=Model, AccountId, Number, APIResp) ->
     NumberState = {'call', 'pqc_cb_response', 'number_state', [APIResp]},
-    NumberData = #{'account_ids' => AccountId
-                  ,'numbers_state' => NumberState
+    NumberData = #{'account_id' => AccountId
+                  ,'number_state' => NumberState
                   },
     Model#kazoo_model{'numbers'=Numbers#{Number => NumberData}}.
 
@@ -241,10 +243,16 @@ remove_number_from_account(#kazoo_model{'numbers'=Numbers}=Model
 transition_number_state(#kazoo_model{'numbers'=Numbers}=Model, Number, APIResp) ->
     NumberData = number_data(Numbers, Number),
     NumberState = {'call', 'pqc_cb_response', 'number_state', [APIResp]},
-    Model#kazoo_model{'numbers'=Numbers#{Number => NumberData#{'numbers_state' => NumberState}}}.
+    Model#kazoo_model{'numbers'=Numbers#{Number => NumberData#{'number_state' => NumberState}}}.
 
 -spec number_data(map() | model(), ne_binary()) -> map() | 'undefined'.
 number_data(#kazoo_model{'numbers'=Numbers}, Number) ->
     number_data(Numbers, Number);
 number_data(Numbers, Number) ->
     maps:get(Number, Numbers, 'undefined').
+
+-spec new_account(ne_binary()) -> account_data().
+new_account(Name) ->
+    #{'name' => Name
+     ,'service_plans' => []
+     }.
