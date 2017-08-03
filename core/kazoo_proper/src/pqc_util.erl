@@ -65,8 +65,8 @@ run_step({'set', Var, Call}, {Step, PQC, State}) ->
     run_call(Var, Call, {Step, PQC, State}).
 
 run_call(_Var, {'call', M, F, Args}=Call, {Step, PQC, State}) ->
-    io:format('user', "(~p) ~p:~p(~p) -> ", [Step, M, F, Args]),
     Args1 = resolve_args(Args, pqc_kazoo_model:api(State)),
+    io:format('user', "(~p) ~p:~p(~p) -> ", [Step, M, F, Args1]),
     Resp = erlang:apply(M, F, Args1),
     io:format('user', "~p~n~n", [Resp]),
     case PQC:postcondition(State, Call, Resp) of
@@ -81,7 +81,6 @@ resolve_args(Args, API) ->
     [resolve_arg(Arg, API) || Arg <- Args].
 
 resolve_arg({'call', M, F, Args}, API) ->
-    io:format("  resolving ~p:~p(~p)~n", [M, F, Args]),
     Args1 = resolve_args(Args, API),
     io:format("  resolved ~p:~p(~p)~n", [M, F, Args1]),
     erlang:apply(M, F, Args1);
